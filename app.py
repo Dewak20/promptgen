@@ -7,7 +7,7 @@ import os
 import cv2
 import base64
 import yt_dlp
-import re  # Library untuk pembersihan teks (Regex)
+import re  # Penting untuk pembersihan teks
 
 # --- FUNGSI BANTUAN ---
 def download_video_from_url(url):
@@ -39,31 +39,18 @@ def extract_frames(video_path):
     return base64Frames
 
 def clean_ai_output(text):
-    """
-    Fungsi 'Satpam' untuk membersihkan sampah dari output AI.
-    Menghapus nomor (1.), tanda kutip, dan label.
-    """
+    """Membersihkan nomor, tanda kutip, dan label."""
     if not text: return ""
-    
-    # 1. Hapus tanda kutip di awal/akhir string
     text = text.strip().strip('"').strip("'")
-    
-    # 2. Hapus pola nomor di awal kalimat (misal "1. ", "1)", "- ")
-    # Regex: Mencari angka diikuti titik/kurung di awal baris
-    text = re.sub(r'^\d+[\.\)]\s*', '', text)
-    text = re.sub(r'^-\s*', '', text)
-    
-    # 3. Hapus label umum jika AI masih bandel
-    text = text.replace("**Prompt:**", "").replace("Prompt:", "").replace("Here is the prompt:", "")
-    
-    # 4. Hapus markdown bold berlebihan
-    text = text.replace("**", "")
-    
+    text = re.sub(r'^\d+[\.\)]\s*', '', text) # Hapus "1." atau "1)"
+    text = re.sub(r'^-\s*', '', text)         # Hapus "- "
+    text = text.replace("**Prompt:**", "").replace("Here is the prompt:", "")
+    text = text.replace("**", "") # Hapus bold
     return text.strip()
 
 # --- UI HALAMAN ---
-st.set_page_config(page_title="Veo 3 Prompter (Clean)", page_icon="✨", layout="wide")
-st.title("✨ Veo 3 Prompter (Clean Output)")
+st.set_page_config(page_title="Veo 3 Prompter Pro", page_icon="🔥", layout="wide")
+st.title("🔥 Veo 3 Prompter (Final)")
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -76,19 +63,20 @@ with st.sidebar:
         gemini_opts = ["gemini-1.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
         selected_model = st.selectbox("Model:", gemini_opts)
     elif provider == "OpenAI":
-        openai_opts = ["gpt-4o-mini", "gpt-4o", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4.1-nano"]
+        openai_opts = ["gpt-4o-mini", "gpt-4o", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini"]
         selected_model = st.selectbox("Model:", openai_opts)
         
-    # --- REVISI: INPUT ANGKA (MAX 15) ---
     st.divider()
+    
+    # REVISI: Menggunakan Number Input (Max 15)
     num_variations = st.number_input(
         "Jumlah Variasi Prompt:", 
         min_value=1, 
-        max_value=15, # Batas maksimal jadi 15
+        max_value=15, 
         value=1,
         step=1
     )
-    st.caption("Tips: Jika memilih >5, proses mungkin agak lama.")
+    st.caption("Maksimal 15 variasi sekaligus.")
 
 # --- INPUT ---
 tab1, tab2 = st.tabs(["📂 Upload", "🔗 Link"])
@@ -102,7 +90,7 @@ with tab1:
         t.write(uf.read())
         video_path = t.name
         st.video(video_path)
-        if st.button("Generate Prompt (Upload)", type="primary"): do_process = True
+        if st.button("Generate (Upload)", type="primary"): do_process = True
 
 with tab2:
     url = st.text_input("Link Video")
@@ -121,12 +109,9 @@ if do_process and video_path:
         st.divider()
         status = st.status("Sedang memproses...", expanded=True)
         
+        # MULAI BLOK TRY
         try:
-            # --- SYSTEM PROMPT (STRICT) ---
-            # --- BAGIAN REVISI: SYSTEM PROMPT (VERSION: LONG & DETAILED) ---
-            
-            # --- BAGIAN REVISI: SYSTEM PROMPT (200 Words Limit) ---
-            
+            # --- SYSTEM PROMPT (Panjang ~200 Kata) ---
             instruction_text = "Generate ONLY the raw prompt text."
             if num_variations > 1:
                 instruction_text = f"Generate {num_variations} variations. Separate them with '|||'."
@@ -143,12 +128,12 @@ if do_process and video_path:
             STRICT OUTPUT RULES:
             1. {instruction_text}
             2. NO numbering, NO bullet points, NO labels like 'Subject:'.
-            3. Start directly with the visual description (e.g., 'Cinematic shot of...').
+            3. Start directly with the visual description.
             """
             
             raw_result = ""
 
-            # Request ke AI
+            # Request AI
             if provider == "Google Gemini":
                 genai.configure(api_key=api_key)
                 v_file = genai.upload_file(video_path)
@@ -166,30 +151,31 @@ if do_process and video_path:
 
             status.update(label="Membersihkan teks...", state="running")
 
-            # --- TAHAP PEMBERSIHAN (PYTHON CLEANING) ---
+            # --- PEMBERSIHAN (Cleaning) ---
             final_output = ""
-            
             if num_variations == 1:
-                # Bersihkan total
                 final_output = clean_ai_output(raw_result)
             else:
-                # Jika variasi banyak, pisahkan dulu, bersihkan satu-satu, lalu gabung
-                # AI mungkin pakai ||| atau baris baru, kita coba split pintar
-                if "|||" in raw_result:
-                    parts = raw_result.split("|||")
-                else:
-                    parts = raw_result.split("\n\n") # Fallback jika AI lupa separator
+                if "|||" in raw_result: parts = raw_result.split("|||")
+                else: parts = raw_result.split("\n\n")
                 
                 cleaned_parts = [clean_ai_output(p) for p in parts if p.strip()]
                 final_output = "\n\n".join(cleaned_parts)
 
             status.update(label="Selesai!", state="complete", expanded=False)
 
-            # --- REVISI: HASIL DENGAN TOMBOL COPY ---
+            # --- TAMPILAN HASIL (Tombol Copy) ---
             st.success("✅ Prompt Siap:")
             
-            # Gunakan st.code() -> Otomatis ada tombol 'COPY' (ikon kertas) di pojok kanan atas kotak
+            # REVISI: Menggunakan st.code agar ada tombol COPY otomatis
             st.code(final_output, language="text", line_numbers=False)
             
-            # Tombol Download tetap ada sebagai cadangan
-            st.download_button("📥 Download file .txt", final_output, "prompt_video.txt")
+            st.download_button("📥 Download .txt", final_output, "prompt_veo.txt")
+
+        except Exception as e:
+            st.error(f"Error: {e}")
+        
+        finally:
+            if video_path and os.path.exists(video_path):
+                try: os.unlink(video_path)
+                except: pass
