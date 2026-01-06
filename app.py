@@ -110,30 +110,47 @@ if do_process and video_path:
         status = st.status("Sedang memproses...", expanded=True)
         
         # MULAI BLOK TRY
+        # MULAI BLOK TRY
         try:
-            # --- SYSTEM PROMPT (Panjang ~200 Kata) ---
-            instruction_text = "Generate ONLY the raw prompt text."
+            # --- SYSTEM PROMPT (CREATIVE VARIATION MODE) ---
+            
+            # Instruksi khusus untuk variasi
+            variation_instruction = ""
             if num_variations > 1:
-                instruction_text = f"Generate {num_variations} variations. Separate them with '|||'."
+                variation_instruction = f"""
+                You must generate {num_variations} DISTINCT variations.
+                For each variation, KEEP the visual style/characters/mood but **INVENT A NEW SCENE or ACTION**.
+                (e.g., If the video shows a cat walking, make prompt 1 about the cat eating, prompt 2 about the cat sleeping).
+                Separate variations with '|||'.
+                """
+            else:
+                variation_instruction = "Generate 1 creative evolution of this scene (same style, slightly different action)."
             
             system_msg = f"""
-            You are a Professional Video Prompt Engineer.
-            Analyze the video frames. Write a detailed visual prompt for Veo/Sora.
+            You are a Creative Video Prompt Director for High-End AI (Veo/Sora).
+            
+            STEP 1: Analyze the input video to extract its **Core Style, Characters, Lighting, and Mood**.
+            STEP 2: Write detailed prompts that maintain that exact style but feature **DIFFERENT ACTIONS or SETTINGS**.
+            
+            OBJECTIVE:
+            The user wants to create a series of videos that look like they belong in the same "collection" or "universe" as the input video, but are NOT identical copies.
             
             CONSTRAINTS:
-            1. **Length:** Limit each prompt to approximately **200 words**.
-            2. **Format:** Must be a **Single Continuous Paragraph**. Do NOT break into lines.
-            3. **Content:** Describe Textures, Lighting, Camera, and Atmosphere vividly.
+            1. **Consistency:** Keep the aesthetic (e.g. cinematic, cartoon, lens type) EXACTLY like the reference.
+            2. **Diversity:** CHANGE the specific action, angle, or background environment for each prompt.
+            3. **Length:** Approx 150-200 words per prompt (Single Paragraph).
+            4. **Detail:** Focus heavily on textures, lighting, and camera movement.
             
             STRICT OUTPUT RULES:
-            1. {instruction_text}
-            2. NO numbering, NO bullet points, NO labels like 'Subject:'.
-            3. Start directly with the visual description.
+            1. {variation_instruction}
+            2. Generate ONLY the raw prompt text.
+            3. NO numbering (1., 2.), NO bullet points, NO labels.
+            4. Start directly with the visual description.
             """
             
             raw_result = ""
 
-            # Request AI
+            # Request AI (Bagian ini TETAP SAMA seperti sebelumnya)
             if provider == "Google Gemini":
                 genai.configure(api_key=api_key)
                 v_file = genai.upload_file(video_path)
@@ -156,6 +173,7 @@ if do_process and video_path:
             if num_variations == 1:
                 final_output = clean_ai_output(raw_result)
             else:
+                # Split berdasarkan separator unik kita
                 if "|||" in raw_result: parts = raw_result.split("|||")
                 else: parts = raw_result.split("\n\n")
                 
@@ -164,13 +182,10 @@ if do_process and video_path:
 
             status.update(label="Selesai!", state="complete", expanded=False)
 
-            # --- TAMPILAN HASIL (Tombol Copy) ---
-            st.success("✅ Prompt Siap:")
-            
-            # REVISI: Menggunakan st.code agar ada tombol COPY otomatis
+            # --- TAMPILAN HASIL ---
+            st.success("✅ Prompt Kreatif Siap:")
             st.code(final_output, language="text", line_numbers=False)
-            
-            st.download_button("📥 Download .txt", final_output, "prompt_veo.txt")
+            st.download_button("📥 Download .txt", final_output, "prompt_veo_creative.txt")
 
         except Exception as e:
             st.error(f"Error: {e}")
